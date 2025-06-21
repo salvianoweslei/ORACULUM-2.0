@@ -70,12 +70,8 @@ def webhook():
 
         else:
             raw_data = request.data.decode("utf-8").strip()
-            if raw_data.startswith("{") and raw_data.endswith("}"):
-                # Se vier JSON puro mesmo fora do padrão, manda o conteúdo
-                send_telegram_message(raw_data)
-            else:
-                # Ignora posts vazios ou com formato ruim (exemplo: Order Fill do TradingView)
-                print("📥 Webhook recebido mas ignorado por falta de JSON válido.")
+            message = raw_data if raw_data else '🚨 Alerta recebido sem conteúdo.'
+            send_telegram_message(message)
 
         return {'ok': True}, 200
 
