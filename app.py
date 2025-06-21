@@ -6,7 +6,7 @@ app = Flask(__name__)
 
 TELEGRAM_TOKEN = "7759153655:AAF3sb4J106-_B3WdOUhbJGOw3cg9zQHLQk"
 CHAT_ID = "-4974125255"
-GOOGLE_SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbym8oShblrXl3jpSDVL-uFoNwWA3EUUJDALr8YYOAlxX9WzvYK6-LeZzxNoRs0tuWWp/exec"
+GOOGLE_SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbw9Ot6CdTZZM8Sj53Emr5LXNZS2ufN3oGJCtw2PUnFjl8KtHC11SnwtIwASyyVkB5Ya/exec"
 
 def format_telegram_message(data):
     alert_type = data.get("type", "")
