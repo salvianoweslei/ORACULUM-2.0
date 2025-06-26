@@ -58,7 +58,18 @@ def post_to_google_sheets(data):
 def webhook():
     global signal_buffer
     try:
-        data = request.get_json(force=True)
+        data = None
+        try:
+            data = request.get_json(force=True)
+        except Exception as e:
+            print("Erro ao interpretar JSON:", e)
+            raw_data = request.data.decode("utf-8").strip()
+            if raw_data:
+                send_telegram_message(f"\u26A0\ufe0f Alerta recebido sem JSON válido:\n\n<code>{raw_data}</code>")
+            else:
+                send_telegram_message("\u26A0\ufe0f Alerta recebido sem conteúdo.")
+            return {'error': 'Invalid JSON'}, 400
+
         asset = data.get("asset", "")
         direction = data.get("direction", "")
         signal_type = data.get("type", "")
@@ -80,24 +91,21 @@ def webhook():
             ocr_data = signal_buffer[asset].get("OCR")
             cnd_data = signal_buffer[asset].get("CND")
 
-            # Verifica se ambos sinais existem e são da mesma direção
             if ocr_data and cnd_data:
                 if (ocr_data["data"].get("direction") == cnd_data["data"].get("direction") and
                     abs(int(ocr_data["data"].get("strength", "0"))) >= 2 and
                     abs(int(cnd_data["data"].get("strength", "0"))) >= 2):
 
-                    # Envia alerta baseado no dado do ORACULUM
                     message = format_telegram_message(ocr_data["data"])
                     send_telegram_message(message)
                     post_to_google_sheets(ocr_data["data"])
-                    signal_buffer[asset] = {}  # limpa
+                    signal_buffer[asset] = {}
 
         elif signal_type in ["TP", "SL", "CANCEL"]:
             message = format_telegram_message(data)
             send_telegram_message(message)
             post_to_google_sheets(data)
 
-        # Limpeza de sinais antigos
         for sym in list(signal_buffer.keys()):
             for src in list(signal_buffer[sym].keys()):
                 if (now - signal_buffer[sym][src]["timestamp"]).total_seconds() > SIGNAL_EXPIRATION_SECONDS:
