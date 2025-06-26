@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from flask import Flask, request
 import requests
 import traceback
@@ -16,14 +17,17 @@ STRENGTH_MAP = {"STRONG": 3, "MEDIUM": 2, "WEAK": 1}
 
 def format_telegram_message(data):
     alert_type = data.get("type", "")
+    strength = str(data.get("strength", "")).upper()
+    direction = str(data.get("direction", "")).upper()
+
     if alert_type == "ENTRY":
-        return f"""🚨 NEW SIGNAL DETECTED 🚨\n\n🆔 ID: {data.get('id')}\n📊 Asset: {data.get('asset')}\n📈 Direction: {data.get('direction')}\n💪 Strength: {data.get('strength')}\n📥 Entry: {data.get('entry')}\n🎯 TP: {data.get('tp')}\n🚩 SL: {data.get('sl')}""
+        return f"""🚨 NEW SIGNAL DETECTED 🚨\n\n🆔 ID: {data.get('id')}\n📊 Asset: {data.get('asset')}\n📈 Direction: {direction}\n💪 Strength: {strength}\n📥 Entry: {data.get('entry')}\n🎯 TP: {data.get('tp')}\n🚩 SL: {data.get('sl')}"""
     elif alert_type == "CANCEL":
-        return f"""⚠️ SIGNAL CANCELLED ⚠️\n\n🆔 ID: {data.get('id')}\n📈 Previous Direction: {data.get('direction')}\n💪 Strength: {data.get('strength')}\nReason: Opposite signal detected within 3 bars."""
+        return f"""⚠️ SIGNAL CANCELLED ⚠️\n\n🆔 ID: {data.get('id')}\n📈 Previous Direction: {direction}\n💪 Strength: {strength}\nReason: Opposite signal detected within 3 bars."""
     elif alert_type == "TP":
-        return f"""🎯 TAKE PROFIT HIT 🎯\n\n🆔 ID: {data.get('id')}\n📈 Direction: {data.get('direction')}\n💪 Strength: {data.get('strength')}\n💰 Closed at: {data.get('closed_at')}"""
+        return f"""🎯 TAKE PROFIT HIT 🎯\n\n🆔 ID: {data.get('id')}\n📈 Direction: {direction}\n💪 Strength: {strength}\n💰 Closed at: {data.get('closed_at')}"""
     elif alert_type == "SL":
-        return f"""🚩 STOP LOSS HIT 🚩\n\n🆔 ID: {data.get('id')}\n📈 Direction: {data.get('direction')}\n💪 Strength: {data.get('strength')}\n💰 Closed at: {data.get('closed_at')}"""
+        return f"""🚩 STOP LOSS HIT 🚩\n\n🆔 ID: {data.get('id')}\n📈 Direction: {direction}\n💪 Strength: {strength}\n💰 Closed at: {data.get('closed_at')}"""
     else:
         return str(data)
 
