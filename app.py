@@ -9,9 +9,9 @@ TELEGRAM_TOKEN = "7759153655:AAF3sb4J106-_B3WdOUhbJGOw3cg9zQHLQk"
 CHAT_ID = "-4974125255"
 GOOGLE_SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbw9Ot6CdTZZM8Sj53Emr5LXNZS2ufN3oGJCtw2PUnFjl8KtHC11SnwtIwASyyVkB5Ya/exec"
 
-# Memória de sinais recebidos (buffer por ativo)
 signal_buffer = {}
-SIGNAL_EXPIRATION_SECONDS = 120  # tempo de validade dos sinais no buffer
+confirmed_entries = set()
+SIGNAL_EXPIRATION_SECONDS = 120
 
 def format_telegram_message(data):
     alert_type = data.get("type", "")
@@ -23,8 +23,7 @@ def format_telegram_message(data):
         return f"""\U0001F3AF TAKE PROFIT HIT \U0001F3AF\n\n\U0001F194 ID: {data.get('id')}\n\U0001F4C8 Direction: {data.get('direction')}\n\U0001F4AA Strength: {data.get('strength')}\n\U0001F4B0 Closed at: {data.get('closed_at')}"""
     elif alert_type == "SL":
         return f"""\U0001F6A9 STOP LOSS HIT \U0001F6A9\n\n\U0001F194 ID: {data.get('id')}\n\U0001F4C8 Direction: {data.get('direction')}\n\U0001F4AA Strength: {data.get('strength')}\n\U0001F4B0 Closed at: {data.get('closed_at')}"""
-    else:
-        return str(data)
+    return str(data)
 
 def send_telegram_message(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -58,16 +57,11 @@ def post_to_google_sheets(data):
 def webhook():
     global signal_buffer
     try:
-        data = None
         try:
             data = request.get_json(force=True)
         except Exception as e:
-            print("Erro ao interpretar JSON:", e)
             raw_data = request.data.decode("utf-8").strip()
-            if raw_data:
-                send_telegram_message(f"\u26A0\ufe0f Alerta recebido sem JSON válido:\n\n<code>{raw_data}</code>")
-            else:
-                send_telegram_message("\u26A0\ufe0f Alerta recebido sem conteúdo.")
+            print("Erro ao interpretar JSON:", e)
             return {'error': 'Invalid JSON'}, 400
 
         asset = data.get("asset", "")
@@ -75,36 +69,36 @@ def webhook():
         signal_type = data.get("type", "")
         strength = int(data.get("strength", "0"))
         signal_id = data.get("id", "")
-        source = signal_id.split("_")[-1]  # OCR ou CND
-
+        source = signal_id.split("_")[-1]
         now = datetime.utcnow()
 
         if signal_type == "ENTRY":
             if asset not in signal_buffer:
                 signal_buffer[asset] = {}
-
             signal_buffer[asset][source] = {
                 "data": data,
                 "timestamp": now
             }
-
             ocr_data = signal_buffer[asset].get("OCR")
             cnd_data = signal_buffer[asset].get("CND")
-
             if ocr_data and cnd_data:
                 if (ocr_data["data"].get("direction") == cnd_data["data"].get("direction") and
                     abs(int(ocr_data["data"].get("strength", "0"))) >= 2 and
                     abs(int(cnd_data["data"].get("strength", "0"))) >= 2):
-
                     message = format_telegram_message(ocr_data["data"])
                     send_telegram_message(message)
                     post_to_google_sheets(ocr_data["data"])
+                    confirmed_entries.add(ocr_data["data"].get("id"))
                     signal_buffer[asset] = {}
 
         elif signal_type in ["TP", "SL", "CANCEL"]:
-            message = format_telegram_message(data)
-            send_telegram_message(message)
-            post_to_google_sheets(data)
+            if signal_id in confirmed_entries:
+                message = format_telegram_message(data)
+                send_telegram_message(message)
+                post_to_google_sheets(data)
+                confirmed_entries.remove(signal_id)
+            else:
+                print(f"Ignorado {signal_type} sem ENTRY confirmado: {signal_id}")
 
         for sym in list(signal_buffer.keys()):
             for src in list(signal_buffer[sym].keys()):
