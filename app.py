@@ -15,6 +15,15 @@ SIGNAL_EXPIRATION_SECONDS = 120
 
 STRENGTH_MAP = {"STRONG": 3, "MEDIUM": 2, "WEAK": 1}
 
+def normalize_strength(label):
+    if isinstance(label, str):
+        label = label.upper().replace("+", "").strip()
+        return STRENGTH_MAP.get(label, 0)
+    try:
+        return int(label)
+    except:
+        return 0
+
 def format_telegram_message(data):
     alert_type = data.get("type", "")
     strength = str(data.get("strength", "")).upper()
@@ -73,8 +82,8 @@ def webhook():
         signal_type = data.get("type", "")
         signal_id = data.get("id", "")
         source = signal_id.split("_")[-1]  # OCR ou CND
-        strength_label = data.get("strength", "")
-        strength = STRENGTH_MAP.get(str(strength_label).upper(), 0)
+        strength_raw = data.get("strength", "")
+        strength = normalize_strength(strength_raw)
 
         now = datetime.utcnow()
 
@@ -92,8 +101,8 @@ def webhook():
 
             if ocr_data and cnd_data:
                 dir_match = ocr_data["data"].get("direction") == cnd_data["data"].get("direction")
-                str_ocr = STRENGTH_MAP.get(ocr_data["data"].get("strength", "").upper(), 0)
-                str_cnd = STRENGTH_MAP.get(cnd_data["data"].get("strength", "").upper(), 0)
+                str_ocr = normalize_strength(ocr_data["data"].get("strength", ""))
+                str_cnd = normalize_strength(cnd_data["data"].get("strength", ""))
 
                 if dir_match and str_ocr >= 2 and str_cnd >= 2:
                     message = format_telegram_message(ocr_data["data"])
@@ -106,6 +115,7 @@ def webhook():
             send_telegram_message(message)
             post_to_google_sheets(data)
 
+        # Remove sinais expirados
         for sym in list(signal_buffer.keys()):
             for src in list(signal_buffer[sym].keys()):
                 if (now - signal_buffer[sym][src]["timestamp"]).total_seconds() > SIGNAL_EXPIRATION_SECONDS:
