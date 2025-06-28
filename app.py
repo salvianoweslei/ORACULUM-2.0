@@ -11,7 +11,8 @@ CHAT_ID = "-4974125255"
 GOOGLE_SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbw9Ot6CdTZZM8Sj53Emr5LXNZS2ufN3oGJCtw2PUnFjl8KtHC11SnwtIwASyyVkB5Ya/exec"
 
 signal_buffer = {}
-SIGNAL_EXPIRATION_SECONDS = 120
+active_signals = {}
+SIGNAL_EXPIRATION_SECONDS = 360
 
 STRENGTH_MAP = {"STRONG": 3, "MEDIUM": 2, "WEAK": 1}
 
@@ -70,10 +71,9 @@ def post_to_google_sheets(data):
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    global signal_buffer
+    global signal_buffer, active_signals
     try:
         data = request.get_json(force=True)
-
         if not isinstance(data, dict):
             return {'error': 'Invalid JSON structure'}, 400
 
@@ -81,7 +81,7 @@ def webhook():
         direction = data.get("direction", "")
         signal_type = data.get("type", "")
         signal_id = data.get("id", "")
-        source = signal_id.split("_")[-1]  # OCR ou CND
+        source = signal_id.split("_")[-1].upper()
         strength_raw = data.get("strength", "")
         strength = normalize_strength(strength_raw)
 
@@ -104,18 +104,40 @@ def webhook():
                 str_ocr = normalize_strength(ocr_data["data"].get("strength", ""))
                 str_cnd = normalize_strength(cnd_data["data"].get("strength", ""))
 
-                if dir_match and str_ocr >= 2 and str_cnd >= 2:
-                    message = format_telegram_message(ocr_data["data"])
-                    send_telegram_message(message)
-                    post_to_google_sheets(ocr_data["data"])
+                time_diff = abs((ocr_data["timestamp"] - cnd_data["timestamp"]).total_seconds())
+                if dir_match and str_ocr >= 2 and str_cnd >= 2 and time_diff <= SIGNAL_EXPIRATION_SECONDS:
+                    if asset in active_signals:
+                        return {'info': 'Sinal já ativo para este ativo'}, 200
+
+                    final_data = ocr_data["data"] if ocr_data["timestamp"] >= cnd_data["timestamp"] else cnd_data["data"]
+                    final_data["entry"] = float(final_data.get("entry"))
+                    atr = float(final_data.get("atr", 0))
+                    adj = float(final_data.get("adj_factor", 1))
+                    sensitivity = float(final_data.get("adaptive_sensitivity", 1))
+
+                    if direction == "BUY":
+                        final_data["tp"] = final_data["entry"] + atr * sensitivity * adj
+                        final_data["sl"] = final_data["entry"] - atr * sensitivity * adj
+                    else:
+                        final_data["tp"] = final_data["entry"] - atr * sensitivity * adj
+                        final_data["sl"] = final_data["entry"] + atr * sensitivity * adj
+
+                    active_signals[asset] = {
+                        "id": signal_id,
+                        "timestamp": now
+                    }
+
+                    send_telegram_message(format_telegram_message(final_data))
+                    post_to_google_sheets(final_data)
                     signal_buffer[asset] = {}
 
         elif signal_type in ["TP", "SL", "CANCEL"]:
-            message = format_telegram_message(data)
-            send_telegram_message(message)
-            post_to_google_sheets(data)
+            if asset in active_signals and active_signals[asset]["id"] == signal_id:
+                send_telegram_message(format_telegram_message(data))
+                post_to_google_sheets(data)
+                del active_signals[asset]
 
-        # Remove sinais expirados
+        # Remove sinais expirados do buffer
         for sym in list(signal_buffer.keys()):
             for src in list(signal_buffer[sym].keys()):
                 if (now - signal_buffer[sym][src]["timestamp"]).total_seconds() > SIGNAL_EXPIRATION_SECONDS:
