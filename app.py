@@ -8,8 +8,7 @@ app = Flask(__name__)
 
 TELEGRAM_TOKEN = "7759153655:AAF3sb4J106-_B3WdOUhbJGOw3cg9zQHLQk"
 CHAT_ID = "-4974125255"
-GOOGLE_SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbytU0_lTRmANdocYpqFJYjKSROGRWoe_xBRYSXMVkztXsPAoxV-yFgLvACDbCG3XiEG/exec
-"
+GOOGLE_SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbytU0_lTRmANdocYpqFJYjKSROGRWoe_xBRYSXMVkztXsPAoxV-yFgLvACDbCG3XiEG/exec"
 
 signal_buffer = {}
 active_signals = {}
