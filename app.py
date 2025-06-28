@@ -31,7 +31,7 @@ def format_telegram_message(data):
     direction = str(data.get("direction", "")).upper()
 
     if alert_type == "ENTRY":
-        return f"""🚨 NEW SIGNAL DETECTED 🚨\n\n🆔 ID: {data.get('id')}\n📊 Asset: {data.get('asset')}\n📈 Direction: {direction}\n💪 Strength: {strength}\n📥 Entry: {data.get('entry')}\n🎯 TP: {data.get('tp')}\n🚩 SL: {data.get('sl')}"""
+        return f"""🚨 NEW SIGNAL DETECTED 🚨\n\n🆔 ID: {data.get('id')}\n📊 Asset: {data.get('asset')}\n📈 Direction: {direction}\n💪 Strength: {strength}\n📥 Entry: {data.get('entry_corrigido')}\n🎯 TP: {data.get('tp_corrigido')}\n🚩 SL: {data.get('sl_corrigido')}"""
     elif alert_type == "CANCEL":
         return f"""⚠️ SIGNAL CANCELLED ⚠️\n\n🆔 ID: {data.get('id')}\n📈 Previous Direction: {direction}\n💪 Strength: {strength}\nReason: Opposite signal detected within 3 bars."""
     elif alert_type == "TP":
@@ -62,7 +62,11 @@ def post_to_google_sheets(data):
         "tp": data.get("tp", ""),
         "sl": data.get("sl", ""),
         "closed_at": data.get("closed_at", ""),
-        "timestamp": data.get("timestamp", "")
+        "timestamp": data.get("timestamp", ""),
+        "entry_corrigido": data.get("entry_corrigido", ""),
+        "tp_corrigido": data.get("tp_corrigido", ""),
+        "sl_corrigido": data.get("sl_corrigido", ""),
+        "source_preferido": data.get("source_preferido", "")
     }
     try:
         requests.post(GOOGLE_SHEETS_WEBHOOK_URL, json=payload, timeout=5)
@@ -110,17 +114,18 @@ def webhook():
                         return {'info': 'Sinal já ativo para este ativo'}, 200
 
                     final_data = ocr_data["data"] if ocr_data["timestamp"] >= cnd_data["timestamp"] else cnd_data["data"]
-                    final_data["entry"] = float(final_data.get("entry"))
+                    final_data["source_preferido"] = "OCR" if ocr_data["timestamp"] >= cnd_data["timestamp"] else "CND"
+                    final_data["entry_corrigido"] = float(final_data.get("entry"))
                     atr = float(final_data.get("atr", 0))
                     adj = float(final_data.get("adj_factor", 1))
                     sensitivity = float(final_data.get("adaptive_sensitivity", 1))
 
                     if direction == "BUY":
-                        final_data["tp"] = final_data["entry"] + atr * sensitivity * adj
-                        final_data["sl"] = final_data["entry"] - atr * sensitivity * adj
+                        final_data["tp_corrigido"] = final_data["entry_corrigido"] + atr * sensitivity * adj
+                        final_data["sl_corrigido"] = final_data["entry_corrigido"] - atr * sensitivity * adj
                     else:
-                        final_data["tp"] = final_data["entry"] - atr * sensitivity * adj
-                        final_data["sl"] = final_data["entry"] + atr * sensitivity * adj
+                        final_data["tp_corrigido"] = final_data["entry_corrigido"] - atr * sensitivity * adj
+                        final_data["sl_corrigido"] = final_data["entry_corrigido"] + atr * sensitivity * adj
 
                     active_signals[asset] = {
                         "id": signal_id,
