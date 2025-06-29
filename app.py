@@ -2,7 +2,7 @@
 from flask import Flask, request
 import requests
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -19,7 +19,7 @@ STRENGTH_MAP = {"STRONG": 3, "MEDIUM": 2, "WEAK": 1}
 def normalize_strength(label):
     if isinstance(label, str):
         label = label.upper().replace("+", "").strip()
-        return STRENGTH_MAP.get(label, 0)
+        return STRENGTH_MAP.get(label, int(label) if label.isdigit() else 0)
     try:
         return int(label)
     except:
@@ -78,6 +78,8 @@ def webhook():
     global signal_buffer, active_signals
     try:
         data = request.get_json(force=True)
+        print(f"🔔 Webhook recebido: {data}")
+
         if not isinstance(data, dict):
             return {'error': 'Invalid JSON structure'}, 400
 
@@ -85,7 +87,7 @@ def webhook():
         direction = data.get("direction", "")
         signal_type = data.get("type", "")
         signal_id = data.get("id", "")
-        source = signal_id.split("_")[-1].upper()
+        source = signal_id.replace("#", "").split("_")[-1].upper()
         strength_raw = data.get("strength", "")
         strength = normalize_strength(strength_raw)
 
@@ -103,12 +105,17 @@ def webhook():
             ocr_data = signal_buffer[asset].get("OCR")
             cnd_data = signal_buffer[asset].get("CND")
 
+            print(f"📦 OCR: {ocr_data}")
+            print(f"📦 CND: {cnd_data}")
+
             if ocr_data and cnd_data:
                 dir_match = ocr_data["data"].get("direction") == cnd_data["data"].get("direction")
                 str_ocr = normalize_strength(ocr_data["data"].get("strength", ""))
                 str_cnd = normalize_strength(cnd_data["data"].get("strength", ""))
-
                 time_diff = abs((ocr_data["timestamp"] - cnd_data["timestamp"]).total_seconds())
+
+                print(f"✅ Direcao igual: {dir_match}, Forcas: OCR={str_ocr}, CND={str_cnd}, TimeDiff={time_diff}")
+
                 if dir_match and str_ocr >= 2 and str_cnd >= 2 and time_diff <= SIGNAL_EXPIRATION_SECONDS:
                     if asset in active_signals:
                         return {'info': 'Sinal já ativo para este ativo'}, 200
@@ -126,6 +133,8 @@ def webhook():
                     else:
                         final_data["tp_corrigido"] = final_data["entry_corrigido"] - atr * sensitivity * adj
                         final_data["sl_corrigido"] = final_data["entry_corrigido"] + atr * sensitivity * adj
+
+                    final_data["timestamp"] = str(int(datetime.utcnow().timestamp() * 1000))
 
                     active_signals[asset] = {
                         "id": signal_id,
